@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>H5P Inhalts-Viewer v7 (Excavator)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- JSZip -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        .drag-area {
+            border: 2px dashed #cbd5e1;
+            transition: all 0.3s;
+        }
+
+        .drag-area.active {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+
+        .correct-answer {
+            background-color: #dcfce7;
+            color: #166534;
+            border-left: 4px solid #22c55e;
+        }
+
+        /* Styles für Drag & Drop Bilder */
+        .dd-image {
+            max-height: 120px;
+            max-width: 100%;
+            width: auto;
+            display: block;
+            margin: 0 auto 0.5rem;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            background-color: #fff;
+            min-height: 20px;
+            /* Ensure visible */
+            min-width: 20px;
+        }
+
+        .dd-item {
+            padding: 8px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #94a3b8;
+            /* Darker border to be visible */
+            margin-bottom: 4px;
+            text-align: center;
+            min-width: 80px;
+            min-height: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 1rem;
+        }
+
+        .gallery-item {
+            background: white;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid #e2e8f0;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .gallery-item img {
+            height: 80px;
+            object-fit: contain;
+            margin: 0 auto 0.25rem;
+            display: block;
+        }
+
+        .gallery-item div {
+            font-size: 0.65rem;
+            color: #64748b;
+            word-break: break-all;
+            line-height: 1.1;
+        }
+
+        .h5p-visual-item.solution {
+            border-color: #22c55e;
+            background-color: #f0fdf4;
+            box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+            z-index: 20;
+        }
+
+        .h5p-visual-item.distractor {
+            opacity: 0.6;
+            filter: grayscale(100%);
+            border-style: dashed;
+            z-index: 5;
+        }
+
+
+        .debug-log {
+            font-family: monospace;
+            font-size: 0.70rem;
+            color: #64748b;
+            margin-top: 2rem;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 1rem;
+            max-height: 300px;
+            overflow-y: auto;
+            background: #fff;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .json-dump {
+            font-family: monospace;
+            font-size: 0.7rem;
+            background: #1e293b;
+            color: #cbd5e1;
+            padding: 10px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            display: none;
+        }
+    </style>
+</head>
+
+<body class="p-6">
+
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <header class="mb-8 text-center no-print">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">H5P Quiz Viewer v7</h1>
+            <p class="text-gray-600 mb-4">Deep-Search für Drag & Drop Inhalte.</p>
+            <button onclick="window.print()"
+                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center shadow-sm transition-colors">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z">
+                    </path>
+                </svg>
+                Als PDF speichern / Drucken
+            </button>
+        </header>
+
+        <!-- Upload Area -->
+        <div id="drop-zone" class="drag-area bg-white rounded-xl p-10 text-center cursor-pointer mb-8 shadow-sm">
+            <div class="space-y-4">
+                <svg class="w-12 h-12 mx-auto text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
+                    </path>
+                </svg>
+                <p class="text-lg text-gray-700 font-medium">H5P Datei hier ablegen oder klicken</p>
+            </div>
+            <input type="file" id="file-input" class="hidden" accept=".h5p,.zip">
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="hidden text-center py-8">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p class="mt-2 text-gray-600">Analysiere Archiv...</p>
+        </div>
+
+        <!-- Output Questions -->
+        <div id="output" class="space-y-6"></div>
+
+        <!-- Output Gallery -->
+        <div id="gallery-section" class="hidden mt-12 pt-8 border-t-2 border-gray-200">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">📂 Datei-Galerie (Alle Bilder)</h2>
+            <div id="gallery-grid" class="gallery-grid"></div>
+        </div>
+
+        <!-- Error -->
+        <div id="error-msg"
+            class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6"></div>
+
+        <!-- Debug Log -->
+        <div id="debug-area" class="hidden debug-log">
+            <h4 class="font-bold mb-2">Technisches Protokoll:</h4>
+            <pre id="log-content" class="whitespace-pre-wrap"></pre>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const output = document.getElementById('output');
+        const gallerySection = document.getElementById('gallery-section');
+        const galleryGrid = document.getElementById('gallery-grid');
+        const loading = document.getElementById('loading');
+        const errorMsg = document.getElementById('error-msg');
+        const debugArea = document.getElementById('debug-area');
+        const logContent = document.getElementById('log-content');
+
+        let currentZip = null;
+        let zipFileList = [];
+
+        function log(msg) {
+            console.log(msg);
+            logContent.textContent += msg + "\n";
+            debugArea.classList.remove('hidden');
+        }
+
+        // --- Event Listeners ---
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('active'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('active'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('active');
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) handleFile(e.target.files[0]);
+        });
+
+        // --- Core Logic ---
+        async function handleFile(file) {
+            resetUI();
+            loading.classList.remove('hidden');
+            log(`[INFO] Start: ${file.name}`);
+
+            try {
+                currentZip = await JSZip.loadAsync(file);
+                zipFileList = Object.keys(currentZip.files).filter(f => !currentZip.files[f].dir);
+                log(`[ZIP] ${zipFileList.length} Dateien im Archiv.`);
+
+                if (zipFileList.length === 0) {
+                    throw new Error("Das Archiv scheint leer zu sein oder konnte nicht gelesen werden.");
+                }
+
+                // 1. Build Gallery 
+                await buildImageGallery(currentZip);
+
+                // 2. Parse JSON
+                let contentFile = currentZip.file("content/content.json") || currentZip.file("content.json");
+                if (!contentFile) throw new Error("Keine content.json gefunden.");
+
+                const contentText = await contentFile.async("string");
+                const contentJson = JSON.parse(contentText);
+                log("[JSON] content.json geladen.");
+
+                const questions = [];
+                findQuestionsRecursive(contentJson, questions);
+                log(`[RESULT] ${questions.length} Fragen gefunden.`);
+
+                renderQuestions(questions);
+
+                // 3. Link Images
+                await loadImagesForQuestions();
+
+                // 4. Auto-Print (PDF)
+                log("[INFO] Analyse fertig. Starte PDF-Dialog...");
+                setTimeout(() => {
+                    window.print();
+                }, 1000); // Short delay to ensure rendering is complete
+
+            } catch (err) {
+                showError(err.message);
+                log(`[ERROR] ${err.message}`);
+                console.error(err);
+                if (err.message.includes("End of data")) {
+                    log("[HINT] Die Datei könnte beschädigt sein oder der Browser blockiert den Zugriff.");
+                }
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        async function buildImageGallery(zip) {
+            gallerySection.classList.remove('hidden');
+            galleryGrid.innerHTML = "";
+            const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
+
+            const imageFiles = zipFileList.filter(filename => {
+                const lower = filename.toLowerCase();
+                return imageExtensions.some(ext => lower.endsWith(ext));
+            });
+
+            for (const filename of imageFiles) {
+                try {
+                    const isSvg = filename.toLowerCase().endsWith('.svg');
+                    const blob = await zip.file(filename).async("blob");
+                    const finalBlob = isSvg ? new Blob([blob], { type: "image/svg+xml" }) : blob;
+                    const url = URL.createObjectURL(finalBlob);
+                    const div = document.createElement('div');
+                    div.className = 'gallery-item';
+                    div.innerHTML = `<img src="${url}" title="${filename}"><div>${filename.split('/').pop()}</div>`;
+                    galleryGrid.appendChild(div);
+                } catch (e) {
+                    log(`[GALLERY ERR] ${filename}: ${e}`);
+                }
+            }
+        }
+
+        // --- Recursive Search ---
+        function findQuestionsRecursive(data, results) {
+            if (!data || typeof data !== 'object') return;
+
+            if (data.library && data.params) {
+                const lib = data.library;
+                const params = data.params;
+
+                if (lib.includes('H5P.MultiChoice')) results.push(parseMultiChoice(params));
+                else if (lib.includes('H5P.TrueFalse')) results.push(parseTrueFalse(params));
+                else if (lib.includes('H5P.DragQuestion')) results.push(parseDragQuestion(params));
+                else if (lib.includes('H5P.Blanks')) results.push(parseBlanks(params));
+                else if (lib.includes('H5P.SingleChoiceSet') && params.choices) {
+                    params.choices.forEach(c => results.push(parseMultiChoice(c, true)));
+                }
+            }
+
+            Object.keys(data).forEach(key => {
+                findQuestionsRecursive(data[key], results);
+            });
+        }
+
+        function cleanHTML(html) {
+            if (!html) return "";
+            if (typeof html !== 'string') return String(html);
+            // Replace common entities
+            let text = html.replace(/&nbsp;/g, " ");
+            const tmp = document.createElement("DIV");
+            tmp.innerHTML = text;
+            return (tmp.textContent || tmp.innerText || "").trim();
+        }
+
+        // --- Deep Content Extraction ---
+        function extractContentFromDraggable(obj) {
+            // This function recursively searches a single draggable object for ANY text or image
+            let bestImage = null;
+            let bestText = null;
+
+            function search(item) {
+                if (!item || typeof item !== 'object') return;
+
+                // 1. Image Check
+                if (item.path && typeof item.path === 'string') {
+                    const lower = item.path.toLowerCase();
+                    if (lower.match(/\.(png|jpg|jpeg|gif|svg|webp)$/i) || (item.mime && item.mime.startsWith('image/'))) {
+                        if (!bestImage) bestImage = item.path;
+                    }
+                }
+
+                // 2. Text Check (RELAXED)
+                if (item.text && typeof item.text === 'string') {
+                    const clean = cleanHTML(item.text);
+                    if (clean.length > 0) { // Allow single chars
+                        // Prefer longer text usually, but keep any valid text
+                        if (!bestText || clean.length > bestText.length) bestText = clean;
+                    }
+                }
+
+                // Fallbacks for text
+                if (!bestText) {
+                    if (item.alt && typeof item.alt === 'string') bestText = item.alt;
+                    else if (item.label && typeof item.label === 'string') bestText = item.label;
+                    else if (item.title && typeof item.title === 'string') bestText = item.title;
+                }
+
+                // Recurse
+                Object.keys(item).forEach(k => search(item[k]));
+            }
+
+            search(obj);
+            return { image: bestImage, text: bestText };
+        }
+
+        function parseMultiChoice(params, isSingleChoiceSet = false) {
+            let qImage = null;
+            if (params.media?.type?.params?.file?.path) qImage = params.media.type.params.file.path;
+
+            return {
+                type: isSingleChoiceSet ? "Single Choice" : "Multiple Choice",
+                question: cleanHTML(params.question),
+                questionImage: qImage,
+                answers: (params.answers || []).map(a => ({
+                    text: cleanHTML(a.text),
+                    correct: a.correct || false
+                }))
+            };
+        }
+
+        function parseTrueFalse(params) {
+            let qImage = params.media?.type?.params?.file?.path || null;
+            const isTrue = params.correct === "true";
+            return {
+                type: "Wahr/Falsch",
+                question: cleanHTML(params.question),
+                questionImage: qImage,
+                answers: [
+                    { text: "Wahr", correct: isTrue },
+                    { text: "Falsch", correct: !isTrue }
+                ]
+            };
+        }
+
+        function parseDragQuestion(params) {
+            const task = params.question?.task?.description ||
+                params.question?.settings?.taskDescription ||
+                "Zuordnungsaufgabe";
+
+            let bgImage = params.question?.settings?.background?.path || null;
+
+            // Search everywhere for draggables
+            let rawDraggables = params.question?.settings?.draggables ||
+                params.question?.task?.elements ||
+                params.elements || [];
+
+            const dropZones = params.question?.settings?.dropZones || [];
+
+            // Detect Stage Size and Aspect Ratio
+            let stageW = 100;
+            let stageH = 100;
+            let ratio = 56.25; // Default 16:9
+            if (params.question && params.question.settings && params.question.settings.size) {
+                stageW = params.question.settings.size.width;
+                stageH = params.question.settings.size.height;
+                if (stageW && stageH) ratio = (stageH / stageW) * 100;
+            }
+
+            // --- GLOBAL COORDINATE MODE DETECTION ---
+            // Scan ALL coordinates to decide if we are in "Pixel Mode" or "Percentage Mode"
+            let maxCoordVal = 0;
+            const check = (val) => { if (val !== undefined && val !== null) maxCoordVal = Math.max(maxCoordVal, val); };
+
+            rawDraggables.forEach(d => { check(d.x); check(d.y); check(d.width); check(d.height); });
+            dropZones.forEach(d => { check(d.x); check(d.y); check(d.width); check(d.height); });
+
+            // If any value > 100, we MUST be in Pixel Mode (since % cannot be > 100 usually)
+            // Exception: Some weird H5P contents might have off-screen items, but standard behavior usually implies Pixels if > 100.
+            const isPixelMode = maxCoordVal > 100;
+            log(`[COORD] MaxVal=${maxCoordVal}, Mode=${isPixelMode ? 'PIXELS' : 'PERCENT'} (Stage: ${stageW}x${stageH})`);
+
+            // Helper to normalize coordinates
+            const normX = (v) => {
+                if (v === undefined) return 0;
+                return isPixelMode ? (v / stageW * 100) : v;
+            };
+            const normY = (v) => {
+                if (v === undefined) return 0;
+                return isPixelMode ? (v / stageH * 100) : v;
+            };
+
+            // Process Draggables using Deep Search
+            const allItems = rawDraggables.map(d => {
+                const content = extractContentFromDraggable(d);
+                return {
+                    id: d.id,
+                    text: content.text || ("Element " + d.id),
+                    image: content.image,
+                    // Coordinates
+                    x: normX(d.x),
+                    y: normY(d.y),
+                    w: normX(d.width || (isPixelMode ? 50 : 5)), // Default width
+                    h: normY(d.height || (isPixelMode ? 50 : 5)),
+                    raw: d
+                };
+            });
+
+            // Capture Zones Visuals
+            const visualZones = dropZones.map(dz => ({
+                label: cleanHTML(dz.label || dz.text || "Zone"),
+                x: normX(dz.x),
+                y: normY(dz.y),
+                w: normX(dz.width || (isPixelMode ? 100 : 10)),
+                h: normY(dz.height || (isPixelMode ? 100 : 10)),
+                correctElements: dz.correctElements || [] // Keep track of correct IDs
+            }));
+
+            // --- CALCULATE SOLUTION STATE ---
+            const solutionItems = [];
+            const usedItemIds = new Set();
+
+            // 1. Place correct items into their zones
+            visualZones.forEach(zone => {
+                zone.correctElements.forEach(itemId => {
+                    const originalItem = allItems.find(i => i.id === itemId);
+                    if (originalItem) {
+                        // Center item in zone
+                        // Zone Center: zx + zw/2, zy + zh/2
+                        // Item Pos: Center - iw/2, Center - ih/2
+                        // NewX = zx + (zw - iw)/2
+                        const newX = zone.x + (zone.w - originalItem.w) / 2;
+                        const newY = zone.y + (zone.h - originalItem.h) / 2;
+
+                        solutionItems.push({
+                            ...originalItem,
+                            x: newX,
+                            y: newY,
+                            isSolution: true,
+                            targetZone: zone.label
+                        });
+                        usedItemIds.add(itemId);
+                    }
+                });
+            });
+
+            // 2. Identify Distractors (Items not used in any zone)
+            allItems.forEach(item => {
+                if (!usedItemIds.has(item.id)) {
+                    solutionItems.push({
+                        ...item,
+                        isDistractor: true
+                    });
+                }
+            });
+
+            // Map Solutions (Text List) - Keep for reference
+            const correctMappings = dropZones.map(dz => {
+                const correctItems = (dz.correctElements || []).map(id => {
+                    const item = allItems.find(i => i.id === id);
+                    return item || { text: "ID: " + id, image: null };
+                });
+                return {
+                    isDragAnswer: true,
+                    zone: cleanHTML(dz.label || dz.text || "Zone"),
+                    items: correctItems,
+                    correct: true
+                };
+            });
+
+            return {
+                type: "Drag & Drop",
+                question: cleanHTML(task),
+                questionImage: bgImage, // Background image used in visual board
+                visualZones: visualZones,
+                solutionItems: solutionItems, // NEW: Items positioned at solution
+                aspectRatio: ratio,
+                answers: correctMappings.length ? correctMappings : [],
+                allItems: allItems,
+                rawParams: params // For debug view
+            };
+        }
+
+        function parseBlanks(params) {
+            const rawText = params.text || "";
+            const matches = rawText.match(/\*([^*]+)\*/g);
+            const solutions = matches ? matches.map(m => m.replace(/\*/g, '')) : [];
+            return {
+                type: "Lückentext",
+                question: cleanHTML(rawText.replace(/\*([^*]+)\*/g, "______")),
+                answers: solutions.map(s => ({ text: s, correct: true }))
+            };
+        }
+
+        // --- Rendering ---
+        function renderQuestions(questions) {
+            output.innerHTML = "";
+
+            if (questions.length === 0) {
+                output.innerHTML = `<div class="p-4 bg-yellow-50 text-yellow-700 rounded-lg">Keine Standard-Fragen gefunden.</div>`;
+                return;
+            }
+
+            questions.forEach((q, index) => {
+                const card = document.createElement('div');
+                card.className = "bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden";
+
+                // Question Image - REMOVE IF DRAG & DROP BECAUSE IT'S IN THE BOARD
+                let mainImageHtml = "";
+                if (q.questionImage && q.type !== "Drag & Drop") {
+                    mainImageHtml = `<div class="mb-4 p-2 bg-gray-50 border rounded text-center"><img data-path="${q.questionImage}" class="max-h-64 mx-auto" alt="Aufgabenbild"></div>`;
+                }
+
+                let contentHtml = "";
+
+                // --- Drag & Drop Specifics ---
+                if (q.type === "Drag & Drop") {
+
+                    if (!q.allItems || q.allItems.length === 0) {
+                        contentHtml = `<div class="p-4 bg-red-50 text-red-800 rounded">Warnung: Keine Draggables gefunden. Bitte "JSON Daten" prüfen.</div>`;
+                    } else {
+
+                        // Background Image (if exists)
+                        if (q.questionImage) {
+                            contentHtml += `<div class="mb-4 p-2 bg-gray-50 border rounded text-center"><img data-path="${q.questionImage}" class="max-h-64 mx-auto" alt="Hintergrundbild"></div>`;
+                        }
+
+                        // Pool (List)
+                        const poolHtml = q.allItems.map(item => {
+                            let imgHtml = "";
+                            if (item.image) {
+                                imgHtml = `<img data-path="${item.image}" class="dd-image" src="" alt="?">`;
+                            } else {
+                                imgHtml = `<div class="w-full h-8 bg-gray-200 mb-2 rounded flex items-center justify-center text-xs text-gray-400">Text</div>`;
+                            }
+                            return `<div class="dd-item">
+                                        ${imgHtml}
+                                        <span class="text-xs font-semibold text-slate-600 break-words">${item.text}</span>
+                                    </div>`;
+                        }).join("");
+
+                        contentHtml += `
+                            <div class="mb-4">
+                                <h4 class="text-xs font-bold uppercase text-slate-500 mb-2">Alle Elemente (Pool):</h4>
+                                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 flex flex-wrap gap-2 justify-center sm:justify-start">
+                                    ${poolHtml}
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // Solutions
+                    q.answers.forEach(a => {
+                        const itemsHtml = a.items.map(item => {
+                            let imgHtml = "";
+                            if (item.image) imgHtml = `<img data-path="${item.image}" class="h-8 w-auto inline-block mr-2 border rounded" src="">`;
+                            return `<div class="inline-flex items-center bg-white px-2 py-1 rounded border border-green-200 text-sm mr-2 mb-1">
+                                        ${imgHtml}
+                                        <span class="font-medium">${item.text}</span>
+                                    </div>`;
+                        }).join("");
+
+                        contentHtml += `
+                            <div class="correct-answer p-3 rounded mb-2">
+                                <div class="font-bold text-sm text-green-800 border-b border-green-200 pb-1 mb-1">Ziel: ${a.zone}</div>
+                                <div class="flex flex-wrap mt-2">${itemsHtml || "<i>Leer</i>"}</div>
+                            </div>
+                        `;
+                    });
+
+                    // JSON Debug Toggle
+                    const jsonId = `json-${index}`;
+                    contentHtml += `
+                        <button onclick="document.getElementById('${jsonId}').style.display = document.getElementById('${jsonId}').style.display === 'block' ? 'none' : 'block'" class="text-xs text-blue-500 underline mt-4 cursor-pointer">
+                            Raw JSON anzeigen (Debug)
+                        </button>
+                        <div id="${jsonId}" class="json-dump">${JSON.stringify(q.rawParams, null, 2)}</div>
+                    `;
+
+                } else {
+                    // --- Standard Types ---
+                    if (q.answers.length > 0) contentHtml += `<h4 class="text-xs font-bold uppercase text-green-600 mb-2">Antworten:</h4>`;
+
+                    q.answers.forEach(a => {
+                        const bg = a.correct ? "correct-answer" : "bg-gray-50 text-gray-600 pl-4 border-l-4 border-gray-200";
+                        const icon = a.correct ? "✓" : "○";
+                        contentHtml += `
+                            <div class="${bg} p-3 rounded mb-2 text-sm flex items-start">
+                                <span class="mr-2 font-bold">${icon}</span>
+                                <span>${a.text}</span>
+                            </div>`;
+                    });
+                }
+
+                card.innerHTML = `
+                    <div class="bg-gray-50 px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">${q.type}</span>
+                        <span class="text-xs text-gray-400">Frage ${index + 1}</span>
+                    </div>
+                    <div class="p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">${q.question || "Frage"}</h3>
+                        ${mainImageHtml}
+                        <div class="space-y-1">${contentHtml}</div>
+                    </div>
+                `;
+                output.appendChild(card);
+            });
+        }
+
+        // --- Aggressive Image Linking ---
+        async function loadImagesForQuestions() {
+            if (!currentZip) return;
+
+            const images = document.querySelectorAll('#output img[data-path]');
+            log(`[LINK] ${images.length} Bilder zu verarbeiten.`);
+
+            for (let img of images) {
+                const originalPath = img.getAttribute('data-path');
+                if (!originalPath) continue;
+
+                let cleanPath = decodeURIComponent(originalPath).trim();
+                cleanPath = cleanPath.replace(/^\.\//, '').replace(/^\//, '');
+
+                const filename = cleanPath.split('/').pop();
+                let foundFile = null;
+
+                // Try candidates
+                const candidates = ["content/" + cleanPath, cleanPath, "content/" + filename, filename];
+                for (let c of candidates) {
+                    if (currentZip.file(c)) { foundFile = currentZip.file(c); break; }
+                }
+
+                // Try Fuzzy
+                if (!foundFile) {
+                    const match = zipFileList.find(f => f.toLowerCase().endsWith(filename.toLowerCase()));
+                    if (match) foundFile = currentZip.file(match);
+                }
+
+                if (foundFile) {
+                    try {
+                        const isSvg = filename.toLowerCase().endsWith('.svg');
+                        const blob = await foundFile.async("blob");
+                        const finalBlob = isSvg ? new Blob([blob], { type: "image/svg+xml" }) : blob;
+                        img.src = URL.createObjectURL(finalBlob);
+                    } catch (e) {
+                        log(`[ERR] ${e}`);
+                    }
+                } else {
+                    img.style.border = "2px solid red";
+                    img.style.minHeight = "40px";
+                    img.style.background = "#fee2e2";
+                    img.alt = "Fehlt: " + filename;
+                }
+            }
+        }
+
+        function resetUI() {
+            output.innerHTML = "";
+            galleryGrid.innerHTML = "";
+            gallerySection.classList.add('hidden');
+            logContent.textContent = "";
+            errorMsg.classList.add('hidden');
+            errorMsg.innerText = "";
+            debugArea.classList.add('hidden');
+        }
+
+        function showError(msg) {
+            errorMsg.innerText = msg;
+            errorMsg.classList.remove('hidden');
+        }
+
+    </script>
+</body>
+
+</html>

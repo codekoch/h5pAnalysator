@@ -1,0 +1,1 @@
+Das pdf-Dokument zeigt einen Quiz im h5p Format. Erstelle eine Information zu den einzelnen Themen für Schüler im Fach Physik inkl. Übungsaufgaben, die auf den Quiz vorbereiten, aber nicht direkt die einzelnen Lösungen verraten. Füge am Ende des Dokumentes die Lösungen der gestellten Übungsaufgaben an.  
