@@ -25,15 +25,15 @@ Das Programm läuft vollständig lokal im Webbrowser (kein Server-Upload notwend
 
 ## 🤖 Arbeitsblätter mit KI erstellen
 
-Eine mächtige Funktion dieses Tools ist die Vorbereitung von Inhalten für KI-Prompts. Da der h5p_Analysator die Strukturen der Aufgaben (Fragen, Antworten, Lücken, Zuordnungen) im Klartext extrahiert, können diese direkt genutzt werden, um hochwertige, gedruckte Arbeitsblätter zu erstellen.
+Eine mächtige Funktion dieses Tools ist die Vorbereitung von Inhalten für KI-Prompts. Da der h5p_Analysator die Strukturen der Aufgaben (Fragen, Antworten, Lücken, Zuordnungen) im Klartext extrahiert, können diese direkt genutzt werden, um gedruckte Arbeitsblätter zu erstellen.
 
 ### Workflow:
 1. **Inhalt kopieren**: Markieren Sie den analysierten Text der H5P-Datei auf der Webseite und kopieren Sie ihn.
 2. **KI Prompt nutzen**: Fügen Sie den Inhalt in einen KI-Chatbot (z.B. ChatGPT, Claude, Gemini) zusammen mit folgendem Prompt ein:
 
-> "Erstelle basierend auf den folgenden Inhalten ein strukturiertes Arbeitsblatt für Schüler. 
-> Wandle die digitalen Aufgaben (z.B. Drag & Drop) in sinnvolle analoge Aufgaben um (z.B. Verbinde mit Linien, Schreibe die richtige Nummer in das Feld). 
-> Füge eine kurze Einleitung hinzu und achte auf eine klare Formatierung."
+> "Erstelle basierend auf den Inhalten des pdf-Dokumentes im Anhang, ein strukturiertes Arbeitsblatt für Schüler. 
+> Das pdf-Dokument zeigt einen Quiz im h5p Format. Erstelle jeweils eine Information zu den einzelnen Themen inkl. Übungsaufgaben, die auf den Quiz vorbereiten, aber nicht direkt die einzelnen Lösungen verraten.
+> Füge am Ende des Dokumentes die Lösungen der gestellten Übungsaufgaben an.  
 
 Durch diesen Schritt lassen sich digitale Übungen in Sekunden in klassische Papier-Arbeitsblätter oder Lernzielkontrollen transformieren, die exakt auf die digitalen Inhalte vorbereiten.
 
